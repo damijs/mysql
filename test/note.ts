@@ -1,22 +1,17 @@
-import { ActiveRecords } from "../dist";
+import { ActiveRecords, QueryBuild } from "@damijs/mysql";
+import { isEmpty } from "@damijs/hp";
+import Rid from "@damijs/rid";
 
 class Note extends ActiveRecords {
 
-    _uid: number = null
     rules = () => {
         return {
             id: ['number'],
             title: ['string', { max: 20 }],
             description: ['required', 'string', { max: 500 }],
             fk_user_id: ['required', 'number'],
-            votes: ['number'],
-            review: ['number'],
-            supporters: ['number'],
-            parent_id: ['number'],
-            ptype: ['number'],
-            create_at: ['string'],
-            state: ['number'],
-            status: ['number']
+            noteid: ['number'],
+            type: ['number', { oneof: [1, 2, 3] }]
         };
     }
 
@@ -43,13 +38,6 @@ class Note extends ActiveRecords {
                 if (isEmpty(model['voters'])) {
                     return [];
                 }
-                const ids = model['voters'].map(e => e["fk_user_id"])
-                const uv = new User();
-                uv.setScenario("VOTERS")
-                const res = await uv.find(q => {
-                    return q.andWhere({ id: ids })
-                }).all();
-                return await res.toJson()
             },
             votes: "votes",
             tot_votes: (model): number => {
@@ -61,86 +49,20 @@ class Note extends ActiveRecords {
             },
             supporters: 'supporters',
             tags: "tags",
-            pmeta: async (model) => {
-                if (isEmpty(model['meta'])) {
-                    return [];
-                }
-                return model['meta'];
-            },
-            meta: async (model: Post): Promise<ListModel<PostMeta>> => {
-                const meta = new PostMeta()
-                const mlist = await meta.find(query => {
-                    return query.andWhere({ fk_post_id: model.id })
-                }).all()
-                return mlist
-            },
-            comments: async (model): Promise<ListModel<Post>> => {
-                const post = new Post()
-                post.setScenario("COMMENT");
-                post.getFkUser().getFkVote(this._uid)
-                const cmt = await post.find((query => {
-                    return query.andWhere({ 'post.parent_id': model.id }).andWhere("post.id!=post.parent_id")
-                })).all()
-                return cmt
-            },
-            hasVote: async (model: Post): Promise<number> => {
-                if ('fkVote' in model && !isEmpty(model['fkVote'])) {
-                    return 1
-                }
-                return 0;
-            },
             ptype: 'ptype',
-            user_dp: (model): string => {
-                if (isEmpty(model['fkUser'])) {
-                    return null;
-                }
-                return Url.to('image', [model['fkUser']['img'], 'thumb'], true);
-            },
             create_at: "create_at",
             createAt: (model): string => {
                 const dt = new Date(model["create_at"])
                 return dt.toLocaleString()
-            },
-            status: (model): string => {
-                return Post.postStatus(model.status);
             },
             statusCode: 'status',
 
         };
     };
 
-    static postStatus(code: number | string) {
-        if (code == Post.eStatus.REVEIEW) {
-            return "Review";
-        } else if (code == Post.eStatus.VOTING) {
-            return "Voting"
-        } else if (code == Post.eStatus.ACCEPETD) {
-            return "Accepted"
-        } else if (code == Post.eStatus.REJECTED) {
-            return "Rejected"
-        }
-    }
-
-    getFkUser() {
-        return this.hasOne(User, { id: "fk_user_id" }, "fkUser")
-    }
-
-    getMeta() {
-        return this.hasMany(PostMeta, ["fk_post_id", "id"], "meta")
-    }
-
-    getComments() {
-        return this.hasMany(Post, ["parent_id", "id"], "comments")
-    }
-    /** get voting data along with current module */
-    getFkVote(userid: number) {
-        this._uid = userid
-        return this.hasOne(UserVotes, { fk_post_id: "id", "custom": [["AND", "=", "user_votes.fk_user_id", userid]] }, "fkVote")
-    }
-
-    getVoter() {
-        return this.hasMany(UserVotes, ["fk_post_id", "id"], "voters")
-    }
+    // getFkUser() {
+    //     return this.hasOne(User, { id: "fk_user_id" }, "fkUser")
+    // }
 
     getCounter() {
         return this.glueQuery((result) => {
@@ -167,10 +89,8 @@ class Note extends ActiveRecords {
     }
 
     async afterSave(type) {
-        if (this.ptype == Post.type.POST && type == Query.INSERT) {
-            let query = `UPDATE post set parent_id=id WHERE parent_id=0 LIMIT 1`
-            await this.getDb().execute(query);
-        }
+        let query = `UPDATE post set parent_id=id WHERE parent_id=0 LIMIT 1`
+        await this.getDb().execute(query);
         return true;
     }
 
