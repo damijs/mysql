@@ -1,14 +1,20 @@
+import { isEmpty } from '@damijs/hp';
 import * as mysql from 'mysql';
 import MyPool from './mypool';
 class Mysql {
     constructor(dbConfig) {
         this.connection = null;
         this.hasTransaction = false;
-        if (dbConfig.dummy === true) {
-            this.con = new MyPool(dbConfig);
-        }
-        else {
-            this.con = mysql.createPool(dbConfig);
+        if (Mysql.con === null) {
+            if (isEmpty(dbConfig)) {
+                throw Error('db configuration must be initilize');
+            }
+            if (dbConfig.dummy === true) {
+                Mysql.con = new MyPool(dbConfig);
+            }
+            else {
+                Mysql.con = mysql.createPool(dbConfig);
+            }
         }
         this.connection = null;
         this.hasTransaction = false;
@@ -178,21 +184,18 @@ class Mysql {
      *
      */
     beginTransaction(hasTransaction) {
-        if (hasTransaction === true) {
-            this.hasTransaction = true;
-        }
         if (this.connection !== null) {
             return Promise.resolve(this.connection);
         }
         return new Promise((resolve, reject) => {
             if (this.hasTransaction === false) {
-                return this.con.getConnection((err1, connection) => {
+                return Mysql.con.getConnection((err1, connection) => {
                     if (err1)
                         throw err1;
                     return resolve(connection);
                 });
             }
-            this.con.getConnection((err1, connection) => {
+            Mysql.con.getConnection((err1, connection) => {
                 if (err1)
                     throw err1;
                 return connection.beginTransaction((err) => {
@@ -247,4 +250,5 @@ class Mysql {
         });
     }
 }
+Mysql.con = null;
 export default Mysql;
