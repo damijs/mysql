@@ -1,5 +1,5 @@
 import { IDatabase } from '../config/IConfig';
-declare type SqlQuery = [string, Array<string | number>];
+type SqlQuery = [string, Array<string | number>];
 declare class Mysql {
     static con: any;
     private connection;

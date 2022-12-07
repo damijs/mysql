@@ -13,6 +13,9 @@ class Mysql {
                 Mysql.con = new MyPool(dbConfig);
             }
             else {
+                if (!("port" in dbConfig)) {
+                    dbConfig = Object.assign(dbConfig, { port: 3306 });
+                }
                 Mysql.con = mysql.createPool(dbConfig);
             }
         }
@@ -186,6 +189,12 @@ class Mysql {
     beginTransaction(hasTransaction) {
         if (this.connection !== null) {
             return Promise.resolve(this.connection);
+        }
+        if (hasTransaction === true) {
+            this.hasTransaction = true;
+        }
+        else {
+            this.hasTransaction = false;
         }
         return new Promise((resolve, reject) => {
             if (this.hasTransaction === false) {
